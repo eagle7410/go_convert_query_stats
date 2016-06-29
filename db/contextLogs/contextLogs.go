@@ -3,18 +3,25 @@ package contextLogs
 import (
 	"fmt"
 	"github.com/mirrr/mgo-wrapper"
+	"reflect"
 	"sync"
-	//"time"
+	"time"
 )
 
 type (
 	obj    map[string]interface{}
+	Geo    map[string] string
 	Params struct {
-		query map[string]interface{}
-		limit int
+		Select map[string]interface{}
+		Query  map[string]interface{}
+		Limit  int
 	}
 	contextLogs struct {
-
+		Timestamp time.Time
+		Price float32
+		Query string
+		Uid   string
+		Geo Geo
 	}
 )
 
@@ -35,10 +42,14 @@ func All(p Params)[]contextLogs {
 	arr := []contextLogs{}
 	mu.Lock()
 
-	qr := mongo.DB(DBName).C(Collection).Find(p.query)
+	qr := mongo.DB(DBName).C(Collection).Find(p.Query)
 
-	if p.limit > 0 {
-		qr.Limit(p.limit)
+	if p.Limit > 0 {
+		qr.Limit(p.Limit)
+	}
+
+	if len(p.Select) > 0 {
+		qr.Select(p.Select)
 	}
 
 	err := qr.All(&arr)
@@ -50,4 +61,20 @@ func All(p Params)[]contextLogs {
 	defer mu.Unlock()
 
 	return arr
+}
+
+func Print (c contextLogs) {
+	fmt.Println("contextLogs map")
+
+	val := reflect.ValueOf(&c).Elem()
+
+	for i := 0; i < val.NumField(); i++ {
+
+		fieldType := val.Type().Field(i)
+		fieldValue := val.Field(i)
+
+		fmt.Printf("--- %s, %v \n", fieldType.Name, fieldValue.Interface())
+	}
+
+	fmt.Println("---------------")
 }
