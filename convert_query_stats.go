@@ -4,6 +4,7 @@ import (
 	"./db/contextLogs"
 	"labix.org/v2/mgo/bson"
 	"runtime"
+	"time"
 	"sync"
 	"fmt"
 
@@ -12,6 +13,8 @@ import (
 var (
 	queris  []string
 	mu      sync.Mutex
+	run     int
+	end     int
 )
 
 func main()  {
@@ -21,42 +24,51 @@ func main()  {
 
 }
 
-func AddQuery(query string, wgPoint *sync.WaitGroup) {
+//func AddQuery(query string, wgPoint *sync.WaitGroup) {
+func AddQuery(query string) {
 
-	l := len(queris)
-
-	fmt.Println("Query ", query)
-
-	for i:=0; i<l; i++ {
+//	defer UnlockQueris(wgPoint)
+	run++
+	for i:=0; i<len(queris); i++ {
 		if queris[i] == query {
 			return
 		}
 	}
 
+//	mu.Lock()
 	queris = append(queris, query)
+//	mu.Unlock()
 
+}
+
+func UnlockQueris (wgPoint *sync.WaitGroup) {
+//
+	end++
+	fmt.Println("End tread", run, end)
 	wgPoint.Done()
 }
 
 func queryCollected () {
+	start := time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	p := contextLogs.Params{Select: bson.M{"query" : 1}, Limit: 5}
+	p := contextLogs.Params{Select: bson.M{"query" : 1}, Limit: 1000}
 
 	arContextLogs := contextLogs.All(p)
 
-	var wg sync.WaitGroup
+//	var wg sync.WaitGroup
 
-	wg.Add(len(arContextLogs))
+//	wg.Add(len(arContextLogs))
 
 	for _,log := range arContextLogs {
 
-		go AddQuery(log.Query, &wg)
+//		go AddQuery(log.Query, &wg)
+		AddQuery(log.Query)
 
 	}
 
-	wg.Wait()
+//	wg.Wait()
 
-	fmt.Println("the end", len(queris), queris)
+	fmt.Println("the end", time.Since(start),len(queris))
 }
 
