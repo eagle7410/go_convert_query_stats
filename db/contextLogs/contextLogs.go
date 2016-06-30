@@ -14,6 +14,7 @@ type (
 	Params struct {
 		Select map[string]interface{}
 		Query  map[string]interface{}
+		Skip   int
 		Limit  int
 	}
 	contextLogs struct {
@@ -29,7 +30,7 @@ var (
 	streams map[string]contextLogs
 	mu      sync.Mutex
 	DBName string = "searchTDS"
-	Collection string = "contextLogsTest"
+	Collection string = "contextLogs"
 )
 
 func Get(id string) contextLogs {
@@ -38,11 +39,15 @@ func Get(id string) contextLogs {
 	return streams[id]
 }
 
+func Count() (n int, err error){
+	return mongo.DB(DBName).C(Collection).Count()
+}
+
 func All(p Params)[]contextLogs {
 	arr := []contextLogs{}
 	mu.Lock()
 
-	qr := mongo.DB(DBName).C(Collection).Find(p.Query)
+	qr := mongo.DB(DBName).C(Collection).Find(p.Query).Skip(p.Skip)
 
 	if p.Limit > 0 {
 		qr.Limit(p.Limit)

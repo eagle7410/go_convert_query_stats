@@ -2,73 +2,132 @@ package main
 
 import (
 	"./db/contextLogs"
-	"labix.org/v2/mgo/bson"
+	"./utils/json"
+	//"labix.org/v2/mgo/bson"
+
 	"runtime"
+	//"strconv"
 	"time"
-	"sync"
+	//"sync"
 	"fmt"
 
+	//"gopkg.in/mgo.v2/bson"
+	//"github.com/davecgh/go-spew/spew"
+)
+
+const steep  = 100000
+type (
+	Count struct {
+		val int
+	}
+	StatsDay  map[string]int
+	StatsDays map[string]StatsDay
+	Stats     struct {
+		Data      StatsDays
+		Count     int
+	}
+	TQueris map[string] *Stats
 )
 
 var (
-	queris  []string
-	mu      sync.Mutex
-	run     int
-	end     int
+	start   time.Time
+	Queris  TQueris
+	//mu      sync.Mutex
+	//run     int
+	//end     int
 )
 
 func main()  {
-//	p := contextLogs.Params{Limit: 5}
-//	p := contextLogs.Params{ Query: bson.M{"price" : bson.M{"$exists" : true}}, Limit: 5}
+	start  = time.Now()
+	Queris = make(TQueris)
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	queryCollected ()
 
 }
 
 //func AddQuery(query string, wgPoint *sync.WaitGroup) {
-func AddQuery(query string) {
-
-//	defer UnlockQueris(wgPoint)
-	run++
-	for i:=0; i<len(queris); i++ {
-		if queris[i] == query {
-			return
-		}
-	}
-
-//	mu.Lock()
-	queris = append(queris, query)
-//	mu.Unlock()
-
-}
-
-func UnlockQueris (wgPoint *sync.WaitGroup) {
+//func AddQuery(query string) {
+//	//Queris = append(queris, query)
+//}
+//func UnlockQueris (wgPoint *sync.WaitGroup) {
 //
-	end++
-	fmt.Println("End tread", run, end)
-	wgPoint.Done()
-}
+//	fmt.Println("End tread", run, end)
+//	wgPoint.Done()
+//}
+
 
 func queryCollected () {
-	start := time.Now()
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	p := contextLogs.Params{Select: bson.M{"query" : 1}, Limit: 1000}
+	//p := contextLogs.Params{ Limit: steep, Query: bson.M{"geo.country" : bson.M{ "$exists" : true}}}
+	p := contextLogs.Params{ Limit: steep}
 
 	arContextLogs := contextLogs.All(p)
 
-//	var wg sync.WaitGroup
-
-//	wg.Add(len(arContextLogs))
-
+	//for i,log := range arContextLogs {
 	for _,log := range arContextLogs {
 
-//		go AddQuery(log.Query, &wg)
-		AddQuery(log.Query)
+		//contextLogs.Print(log);
+		country := "ALL";
 
+		if len(log.Geo) != 0 {
+			for k, val:= range log.Geo {
+				if k == "country" && val != "" {
+					country = val
+				}
+			}
+		}
+
+		stDate := log.Timestamp.Format("2006-01-02")
+
+		query := Queris[log.Query]
+
+		if query == nil {
+			Queris[log.Query] = &Stats{}
+			query = Queris[log.Query]
+		}
+
+
+		statDays := query.Data
+
+		if statDays == nil {
+			query.Data  = make(StatsDays)
+			statDays = query.Data
+		}
+
+		statDay := statDays[stDate]
+
+		if statDay == nil {
+			query.Data[stDate] = make(StatsDay)
+			statDay = query.Data[stDate]
+		}
+
+		query.Data[stDate]["ALL"]++
+
+		if country != "ALL" {
+			query.Data[stDate][country]++
+		}
+
+		query.Count++
+
+		//if i % 1000 == 0 {
+		//	fmt.Println("__ITER ", i)
+		//}
+		//fmt.Println("__ITER ", i)
 	}
 
-//	wg.Wait()
+	_, err := json.ToFile(Queris, "./buffer/res")
 
-	fmt.Println("the end", time.Since(start),len(queris))
+	if err != nil {
+		fmt.Println("Error write to json ", err)
+	}
+
+	Queris2 := make(TQueris)
+
+	json.FromFile("./buffer/res", &Queris2)
+
+	fmt.Println("the end", time.Since(start), len(Queris), len(Queris2))
+	//spew.Dump(Queris2)
 }
 
+//	var wg sync.WaitGroup
+//	wg.Add(len(arContextLogs))
+//	wg.Wait()
