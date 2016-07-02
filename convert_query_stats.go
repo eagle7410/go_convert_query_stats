@@ -8,12 +8,18 @@ import (
 	"time"
 	"sync"
 	"fmt"
+	"os"
 
 	//"gopkg.in/mgo.v2/bson"
 //	"github.com/davecgh/go-spew/spew"
 )
 
-const steep  = 20000
+const (
+	steep          = 20000
+	filePathBuffer = "./buffer/res_"
+	fileMerged     = "./buffer/mergeFiles/merge_"
+)
+
 type (
 	StatsDay  map[string]int
 	StatsDays map[string]StatsDay
@@ -25,42 +31,101 @@ type (
 )
 
 var (
-	start   time.Time
-	wg      sync.WaitGroup
+	fromSteep byte
+	start     time.Time
+	wg        sync.WaitGroup
+	max       int
+	err       error
 	//mu      sync.Mutex
-	//run     int
-	//end     int
 )
 
-func main()  {
+func ( i TQueris ) Add (a TQueris)  {
+	fmt.Println("Adding instance")
+}
+
+func SteepGet () {
+	fromSteep := strconv.Itoa(os.Getenv("fromSteep"))
+	if fromSteep == 0 {
+		fromSteep = 1
+	}
+}
+
+func init () {
 	start  = time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU()*3)
-	max, err := contextLogs.Count()
+	SteepGet()
+	max, err = contextLogs.Count()
+}
 
-	if err != nil {
-		fmt.Println("Error get Count", err)
-		return
+func main()  {
+
+	if fromSteep == 1 {
+
+		if err != nil {
+			fmt.Println("Error get Count", err)
+			return
+		}
+
+		for i:=0; i < max;  {
+			wg.Add(1)
+			go queryCollected (i)
+			i +=steep
+		}
+
+		wg.Wait()
+		fromSteep++
 	}
 
-	for i:=0; i < max;  {
-		wg.Add(1)
-		go queryCollected (i)
-		i +=steep
-	}
+	if fromSteep == 2 {
+		Queris := make(TQueris)
 
-	wg.Wait()
+		err = json.FromFile(filePathBuffer + "0", &Queris)
+
+		if err != nil {
+			fmt.Println("[Merge part]Error get data from first file", err)
+			return
+		}
+
+		for i:=steep; i < max;  {
+			queryMerge(i, &Queris)
+			i +=steep
+		}
+
+		fromSteep++
+	}
 
 	fmt.Println("the end", time.Since(start))
 }
 
+func queryMerge(skip int, Queris *TQueris) {
+
+	strSkip := strconv.Itoa(skip)
+	querisAdding := make(TQueris)
+
+	err = json.FromFile(filePathBuffer + strSkip, &querisAdding)
+
+	if err != nil {
+		fmt.Println("[queryMerge]Error get data from file ", err)
+		return
+	}
+
+	Queris.Add(querisAdding)
+
+	if skip % 100000 == 0 {
+		_, err = json.ToFile(Queris, fileMerged + strSkip )
+		if err != nil {
+			fmt.Println("[queryMerge]Error save merged ", err)
+		}
+	}
+
+}
+
 func queryCollected (skip int) {
-	//p := contextLogs.Params{ Limit: steep, Query: bson.M{"geo.country" : bson.M{ "$exists" : true}}}
 	Queris := make(TQueris)
 	p := contextLogs.Params{ Limit: steep, Skip: skip }
 
 	arContextLogs := contextLogs.All(p)
 
-	//for i,log := range arContextLogs {
 	for _,log := range arContextLogs {
 
 //		contextLogs.Print(log);
@@ -103,19 +168,13 @@ func queryCollected (skip int) {
 		if country != "ALL" {
 			query.Data[stDate][country]++
 		}
-//		if log.Uid !=  {
-//
-//		}
-
-//		spew.Dump(statCountry)
-//
 
 		query.Count++
 
 	}
 
 	strSkip := strconv.Itoa(skip)
-	_, err := json.ToFile(Queris, "./buffer/res_" + strSkip )
+	_, err := json.ToFile(Queris, filePathBuffer + strSkip )
 
 	if err != nil {
 		fmt.Println("Error write to json ", err)
@@ -125,14 +184,10 @@ func queryCollected (skip int) {
 
 	defer wg.Done()
 
-//	Queris2 := make(TQueris)
-
-//	json.FromFile("./buffer/res", &Queris2)
-
-
-//	spew.Dump(Queris)
 }
 
-//	var
+//	Queris2 := make(TQueris)
+//
+//	spew.Dump(Queris)
 //	wg.Add(len(arContextLogs))
 //
