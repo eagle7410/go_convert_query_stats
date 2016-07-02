@@ -34,15 +34,13 @@ var (
 
 func main()  {
 	start  = time.Now()
-	runtime.GOMAXPROCS(runtime.NumCPU()*2)
+	runtime.GOMAXPROCS(runtime.NumCPU()*3)
 	max, err := contextLogs.Count()
 
 	if err != nil {
 		fmt.Println("Error get Count", err)
 		return
 	}
-
-	max = 1000
 
 	for i:=0; i < max;  {
 		wg.Add(1)
