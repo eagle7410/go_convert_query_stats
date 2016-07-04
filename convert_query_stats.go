@@ -11,7 +11,8 @@ import (
 	"os"
 
 	//"gopkg.in/mgo.v2/bson"
-//	"github.com/davecgh/go-spew/spew"
+	//"github.com/davecgh/go-spew/spew"
+	//"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -31,7 +32,7 @@ type (
 )
 
 var (
-	fromSteep byte
+	fromSteep int
 	start     time.Time
 	wg        sync.WaitGroup
 	max       int
@@ -40,14 +41,50 @@ var (
 )
 
 func ( i TQueris ) Add (a TQueris)  {
-	fmt.Println("Adding instance")
+	for query, stat := range a {
+		qr := i[query]
+
+		if qr == nil {
+			i[query] = stat
+			continue
+		}
+
+		i[query].Count += stat.Count
+
+		for day, statCountries := range stat.Data {
+			statDay := qr.Data[day]
+
+			if statDay == nil {
+				i[query].Data[day] = statCountries
+				continue
+			}
+
+			for country, count := range statCountries {
+				statCount := statDay[country]
+
+				if statCount == 0 {
+					i[query].Data[day][country] = count
+					continue
+				}
+
+				i[query].Data[day][country] += count
+			}
+
+		}
+
+	}
 }
 
 func SteepGet () {
-	fromSteep := strconv.Itoa(os.Getenv("fromSteep"))
+
+	strEnvFromSteep := os.Getenv("fromSteep")
+	envFromSteep, _ := strconv.Atoi(strEnvFromSteep)
+	fromSteep = envFromSteep
+
 	if fromSteep == 0 {
 		fromSteep = 1
 	}
+
 }
 
 func init () {
@@ -58,7 +95,7 @@ func init () {
 }
 
 func main()  {
-
+	fmt.Println("fromSteep", fromSteep)
 	if fromSteep == 1 {
 
 		if err != nil {
@@ -89,6 +126,7 @@ func main()  {
 		for i:=steep; i < max;  {
 			queryMerge(i, &Queris)
 			i +=steep
+			fmt.Println( "Next steep" + strconv.Itoa(i) )
 		}
 
 		fromSteep++
@@ -115,6 +153,8 @@ func queryMerge(skip int, Queris *TQueris) {
 		_, err = json.ToFile(Queris, fileMerged + strSkip )
 		if err != nil {
 			fmt.Println("[queryMerge]Error save merged ", err)
+		} else {
+			fmt.Println("[queryMerge]Save ok " + fileMerged + strSkip)
 		}
 	}
 
@@ -185,9 +225,3 @@ func queryCollected (skip int) {
 	defer wg.Done()
 
 }
-
-//	Queris2 := make(TQueris)
-//
-//	spew.Dump(Queris)
-//	wg.Add(len(arContextLogs))
-//
