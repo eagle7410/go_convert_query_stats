@@ -16,6 +16,7 @@ type (
 		Query  map[string]interface{}
 		Skip   int
 		Limit  int
+		Field  string
 	}
 	contextLogs struct {
 		Timestamp time.Time
@@ -64,6 +65,17 @@ func All(p Params)[]contextLogs {
 	}
 
 	defer mu.Unlock()
+
+	return arr
+}
+
+func DistinctStr (p Params) []string {
+	arr := []string{}
+	err := mongo.DB(DBName).C(Collection).Find(p.Query).Distinct(p.Field, &arr)
+
+	if err != nil {
+		fmt.Println("Error DistinctStr ", err)
+	}
 
 	return arr
 }

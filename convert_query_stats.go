@@ -29,33 +29,35 @@ type (
 		Count     int
 	}
 	TQueris map[string] *Stats
+
 )
 
 var (
-	fromSteep int
-	start     time.Time
-	wg        sync.WaitGroup
-	max       int
-	err       error
+	Queris, querisAdding TQueris
+	fromSteep, max, i    int
+	strSkip, labelLast   string
+	start                time.Time
+	wg                   sync.WaitGroup
+	err                  error
 	//mu      sync.Mutex
 )
 
-func ( i TQueris ) Add (a TQueris)  {
-	for query, stat := range a {
-		qr := i[query]
+func ( inst TQueris ) Add (a *TQueris)  {
+	for query, stat := range *a {
+		qr := inst[query]
 
 		if qr == nil {
-			i[query] = stat
+			inst[query] = stat
 			continue
 		}
 
-		i[query].Count += stat.Count
+		inst[query].Count += stat.Count
 
 		for day, statCountries := range stat.Data {
 			statDay := qr.Data[day]
 
 			if statDay == nil {
-				i[query].Data[day] = statCountries
+				inst[query].Data[day] = statCountries
 				continue
 			}
 
@@ -63,11 +65,11 @@ func ( i TQueris ) Add (a TQueris)  {
 				statCount := statDay[country]
 
 				if statCount == 0 {
-					i[query].Data[day][country] = count
+					inst[query].Data[day][country] = count
 					continue
 				}
 
-				i[query].Data[day][country] += count
+				inst[query].Data[day][country] += count
 			}
 
 		}
@@ -88,22 +90,24 @@ func SteepGet () {
 }
 
 func init () {
-	start  = time.Now()
 	runtime.GOMAXPROCS(runtime.NumCPU()*3)
+	start  = time.Now()
 	SteepGet()
 	max, err = contextLogs.Count()
+	labelLast = "Last"
 }
 
 func main()  {
 	fmt.Println("fromSteep", fromSteep)
+
+	if err != nil {
+		fmt.Println("Error get Count", err)
+		return
+	}
+
 	if fromSteep == 1 {
 
-		if err != nil {
-			fmt.Println("Error get Count", err)
-			return
-		}
-
-		for i:=0; i < max;  {
+		for i=0; i < max;  {
 			wg.Add(1)
 			go queryCollected (i)
 			i +=steep
@@ -114,52 +118,56 @@ func main()  {
 	}
 
 	if fromSteep == 2 {
-		Queris := make(TQueris)
+		max = 3300000
+		Queris = make(TQueris)
 
-		err = json.FromFile(filePathBuffer + "0", &Queris)
+
+		err = json.FromFile(filePathBuffer + "0", &Queris )
 
 		if err != nil {
 			fmt.Println("[Merge part]Error get data from first file", err)
 			return
 		}
 
-		for i:=steep; i < max;  {
-			queryMerge(i, &Queris)
-			i +=steep
+		for i=steep; i < max;  {
+			strSkip = strconv.Itoa(i)
+			querisAdding = make(TQueris)
+			queryMerge(&i, &strSkip, &Queris, &querisAdding)
+			i += steep
 			fmt.Println( "Next steep" + strconv.Itoa(i) )
 		}
 
+		saveMerge(&labelLast)
+
 		fromSteep++
+
 	}
 
 	fmt.Println("the end", time.Since(start))
 }
 
-func queryMerge(skip int, Queris *TQueris) {
+func queryMerge(skip *int, strSkip *string, Queris *TQueris, querisAdding *TQueris) {
 
-	strSkip := strconv.Itoa(skip)
-	querisAdding := make(TQueris)
-
-	err = json.FromFile(filePathBuffer + strSkip, &querisAdding)
-
-	if err != nil {
+	if json.FromFile(filePathBuffer + *strSkip, querisAdding) != nil {
 		fmt.Println("[queryMerge]Error get data from file ", err)
 		return
 	}
 
+
 	Queris.Add(querisAdding)
 
-	if skip % 100000 == 0 {
-		_, err = json.ToFile(Queris, fileMerged + strSkip )
-		if err != nil {
-			fmt.Println("[queryMerge]Error save merged ", err)
-		} else {
-			fmt.Println("[queryMerge]Save ok " + fileMerged + strSkip)
-		}
+	if *skip % 10000000 == 0 {
+		saveMerge(strSkip)
 	}
 
 }
-
+func saveMerge(strSkip *string) {
+	if json.ToFile(Queris, fileMerged + *strSkip ) != nil {
+		fmt.Println("[queryMerge]Error save merged ", err)
+	} else {
+		fmt.Println("[queryMerge]Save ok " + fileMerged + *strSkip)
+	}
+}
 func queryCollected (skip int) {
 	Queris := make(TQueris)
 	p := contextLogs.Params{ Limit: steep, Skip: skip }
@@ -214,7 +222,7 @@ func queryCollected (skip int) {
 	}
 
 	strSkip := strconv.Itoa(skip)
-	_, err := json.ToFile(Queris, filePathBuffer + strSkip )
+	err := json.ToFile(Queris, filePathBuffer + strSkip )
 
 	if err != nil {
 		fmt.Println("Error write to json ", err)
